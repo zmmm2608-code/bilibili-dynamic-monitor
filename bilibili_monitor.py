@@ -25,7 +25,13 @@ def get_latest_dynamic(uid):
     }
 
     try:
-        resp = requests.get(url, headers=headers, timeout=10)
+        headers = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0 Safari/537.36",
+    "Referer": f"https://space.bilibili.com/{uid}/dynamic",
+}
+
+resp = requests.get(url, headers=headers, timeout=10)
+
         text = resp.text.strip()
         if resp.status_code != 200 or not text:
             print(f"❌ 请求失败: {resp.status_code}, 内容: {text[:80]}")
