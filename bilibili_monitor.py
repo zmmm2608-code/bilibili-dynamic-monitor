@@ -124,17 +124,19 @@ def main():
     # 格式化时间
     dt = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(latest["time"]))
     pics_html = "".join([f'<br><img src="{url}" width="250"/>' for url in latest["pics"]])
+    text_html = latest["text"].replace("\n", "<br>")
 
-    msg = f"""
-    <b>UP主：</b>{latest['uname']}<br>
-    <b>时间：</b>{dt}<br>
-    <b>内容：</b><br>{latest['text'].replace('\n', '<br>')}<br>
-    <a href="https://t.bilibili.com/{latest['id']}">🔗 点此查看原动态</a>
-    {pics_html}
-    """
+    msg = (
+        f"<b>UP主：</b>{latest['uname']}<br>"
+        f"<b>时间：</b>{dt}<br>"
+        f"<b>内容：</b><br>{text_html}<br>"
+        f'<a href="https://t.bilibili.com/{latest["id"]}">🔗 点此查看原动态</a>'
+        f"{pics_html}"
+    )
 
     send_pushplus(msg, title=f"{latest['uname']} 有新动态！")
     save_last_dynamic_id(latest["id"])
+
 
 
 if __name__ == "__main__":
