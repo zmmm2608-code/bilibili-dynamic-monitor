@@ -7,8 +7,7 @@ import time
 UID = 322005137  # UP主 UID
 PUSH_TOKEN = os.getenv("PUSHPLUS_TOKEN") or "a1dbf0a51e394c77af96b533ebab1d2a"
 LAST_ID_FILE = "last_dynamic_id.txt"
-CHECK_INTERVAL = 600  # 每隔多少秒检测一次（GitHub Actions建议 600 秒）
-
+CHECK_INTERVAL = 600  # 每隔多少秒检测一次
 # ===========================
 
 
@@ -16,22 +15,14 @@ def get_latest_dynamic(uid):
     """获取UP主最新一条动态"""
     url = f"https://api.vc.bilibili.com/dynamic_svr/v1/dynamic_svr/space_history?host_uid={uid}"
     headers = {
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/120.0 Safari/537.36"
-        ),
-        "Referer": f"https://space.bilibili.com/{uid}/",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                      "AppleWebKit/537.36 (KHTML, like Gecko) "
+                      "Chrome/117.0 Safari/537.36",
+        "Referer": f"https://space.bilibili.com/{uid}/dynamic",
     }
 
     try:
-        headers = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0 Safari/537.36",
-    "Referer": f"https://space.bilibili.com/{uid}/dynamic",
-}
-
-resp = requests.get(url, headers=headers, timeout=10)
-
+        resp = requests.get(url, headers=headers, timeout=10)
         text = resp.text.strip()
         if resp.status_code != 200 or not text:
             print(f"❌ 请求失败: {resp.status_code}, 内容: {text[:80]}")
@@ -52,18 +43,18 @@ resp = requests.get(url, headers=headers, timeout=10)
         try:
             content_json = json.loads(card["card"])
             item = content_json.get("item", {})
-            text = item.get("description") or item.get("content") or "（无文字内容）"
+            text_content = item.get("description") or item.get("content") or "（无文字内容）"
             pictures = item.get("pictures", [])
             pic_urls = [p.get("img_src") for p in pictures]
         except Exception as e:
             print(f"⚠️ 解析动态内容失败: {e}")
-            text, pic_urls = "(解析失败)", []
+            text_content, pic_urls = "(解析失败)", []
 
         return {
             "id": dynamic_id,
             "uid": uid,
             "uname": uname,
-            "text": text,
+            "text": text_content,
             "time": timestamp,
             "pics": pic_urls,
         }
@@ -142,7 +133,6 @@ def main():
 
     send_pushplus(msg, title=f"{latest['uname']} 有新动态！")
     save_last_dynamic_id(latest["id"])
-
 
 
 if __name__ == "__main__":
