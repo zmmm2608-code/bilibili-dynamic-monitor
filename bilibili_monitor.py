@@ -27,6 +27,8 @@ def send_push(title, content):
 
 # 获取 UP 最新动态
 def get_latest_dynamic(uid):
+    import json, requests, time
+
     url = f"https://api.vc.bilibili.com/dynamic_svr/v1/dynamic_svr/space_history?host_uid={uid}"
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -34,27 +36,49 @@ def get_latest_dynamic(uid):
                       "Chrome/120.0 Safari/537.36",
         "Referer": f"https://space.bilibili.com/{uid}/",
     }
-    resp = requests.get(url, headers=headers, timeout=10)
-    if resp.status_code != 200 or not resp.text.strip():
-        raise Exception(f"请求失败，状态码: {resp.status_code}, 内容: {resp.text[:100]}")
-    data = resp.json()
-    card = data["data"]["cards"][0]
+
+    try:
+        resp = requests.get(url, headers=headers, timeout=10)
+        if resp.status_code != 200 or not resp.text.strip():
+            raise Exception(f"请求失败，状态码: {resp.status_code}, 内容: {resp.text[:100]}")
+
+        data = resp.json()
+    except Exception as e:
+        print(f"❌ JSON解析失败或网络错误: {e}")
+        print(f"返回内容片段: {resp.text[:200]}")
+        return None
+
+    # 容错：检查data结构是否存在
+    if not data or "data" not in data or not data["data"] or "cards" not in data["data"]:
+        print(f"⚠️ 数据结构异常，返回内容: {str(data)[:200]}")
+        return None
+
+    cards = data["data"]["cards"]
+    if not cards:
+        print("⚠️ 没有获取到动态（可能UP主近期没有动态或接口被限）")
+        return None
+
+    card = cards[0]
     desc = card["desc"]
     dynamic_id = desc["dynamic_id_str"]
     timestamp = desc["timestamp"]
     uname = desc["user_profile"]["info"]["uname"]
+
     content_json = json.loads(card["card"])
-    text = content_json["item"].get("description", "")
-    pictures = content_json["item"].get("pictures", [])
-    pic_urls = [p["img_src"] for p in pictures]
+    item = content_json.get("item", {})
+    text = item.get("description") or item.get("content") or "（无文字内容）"
+    pictures = item.get("pictures", [])
+    pic_urls = [p.get("img_src") for p in pictures]
+
     return {
         "id": dynamic_id,
         "uid": uid,
         "uname": uname,
         "text": text,
         "time": timestamp,
-        "pics": pic_urls
+        "pics": pic_urls,
     }
+
 
 
 # 主逻辑
