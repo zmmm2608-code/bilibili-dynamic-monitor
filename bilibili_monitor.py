@@ -6,6 +6,12 @@ import time
 # ========== 配置区 ==========
 UID = 322005137  # UP主 UID
 PUSH_TOKEN = os.getenv("PUSHPLUS_TOKEN") or "a1dbf0a51e394c77af96b533ebab1d2a"
+BILI_COOKIE = os.getenv("BILI_COOKIE") or (
+    "SESSDATA=4e98e19c%2C1776081250%2Cfaa74%2Aa1CjAQu1h9psXJ8jEixSnO07p3TDQ_5QvjKqhqPqrLqJ8-sMSEbt3PFpG65o_XW7ObO84SVld0c0VGYXBkZFJXS2dLRG5zTTd3YndtUzdtUFRDYkZtZ3FOUHNvc2Z5VlcxbHZYQmgxM3REajQ0SWpFVWxHY0R6aWJIZjczZE80YjcxUmotS25tN0pBIIEC;"
+    "DedeUserID=300455077;"
+    "DedeUserID__ckMd5=944861bfb30cf4e5;"
+    "sid=dkhnz0i1"
+)
 LAST_ID_FILE = "last_dynamic_id.txt"
 CHECK_INTERVAL = 600  # 每隔多少秒检测一次
 # ===========================
@@ -19,6 +25,7 @@ def get_latest_dynamic(uid):
                       "AppleWebKit/537.36 (KHTML, like Gecko) "
                       "Chrome/117.0 Safari/537.36",
         "Referer": f"https://space.bilibili.com/{uid}/dynamic",
+        "Cookie": BILI_COOKIE,
     }
 
     try:
