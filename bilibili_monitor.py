@@ -1,112 +1,141 @@
 import requests
 import json
 import os
+import time
 
-# 配置
-UID = 322005137
-PUSH_TOKEN = "a1dbf0a51e394c77af96b533ebab1d2a"  # ← 换成你的真实 PushPlus token
-DATA_FILE = "latest_dynamic.json"
+# ========== 配置区 ==========
+UID = 322005137  # UP主 UID
+PUSH_TOKEN = os.getenv("PUSHPLUS_TOKEN") or "a1dbf0a51e394c77af96b533ebab1d2a"
+LAST_ID_FILE = "last_dynamic_id.txt"
+CHECK_INTERVAL = 600  # 每隔多少秒检测一次（GitHub Actions建议 600 秒）
 
-# PushPlus 推送函数
-def send_push(title, content):
-    url = "http://www.pushplus.plus/send"
-    data = {
-        "token": PUSH_TOKEN,
-        "title": title,
-        "content": content,
-        "template": "html"
-    }
-    try:
-        resp = requests.post(url, json=data, timeout=10)
-        if resp.status_code == 200:
-            print("✅ PushPlus 推送成功")
-        else:
-            print("⚠️ PushPlus 推送失败:", resp.text)
-    except Exception as e:
-        print("❌ PushPlus 异常:", e)
+# ===========================
 
-# 获取 UP 最新动态
+
 def get_latest_dynamic(uid):
-    import json, requests, time
-
+    """获取UP主最新一条动态"""
     url = f"https://api.vc.bilibili.com/dynamic_svr/v1/dynamic_svr/space_history?host_uid={uid}"
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                      "AppleWebKit/537.36 (KHTML, like Gecko) "
-                      "Chrome/120.0 Safari/537.36",
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/120.0 Safari/537.36"
+        ),
         "Referer": f"https://space.bilibili.com/{uid}/",
     }
 
     try:
         resp = requests.get(url, headers=headers, timeout=10)
-        if resp.status_code != 200 or not resp.text.strip():
-            raise Exception(f"请求失败，状态码: {resp.status_code}, 内容: {resp.text[:100]}")
+        text = resp.text.strip()
+        if resp.status_code != 200 or not text:
+            print(f"❌ 请求失败: {resp.status_code}, 内容: {text[:80]}")
+            return None
 
-        data = resp.json()
+        data = json.loads(text)
+        cards = data.get("data", {}).get("cards", [])
+        if not cards:
+            print("⚠️ 没有获取到动态（cards 为空）")
+            return None
+
+        card = cards[0]
+        desc = card.get("desc", {})
+        dynamic_id = str(desc.get("dynamic_id_str") or desc.get("dynamic_id"))
+        timestamp = desc.get("timestamp")
+        uname = desc.get("user_profile", {}).get("info", {}).get("uname")
+
+        try:
+            content_json = json.loads(card["card"])
+            item = content_json.get("item", {})
+            text = item.get("description") or item.get("content") or "（无文字内容）"
+            pictures = item.get("pictures", [])
+            pic_urls = [p.get("img_src") for p in pictures]
+        except Exception as e:
+            print(f"⚠️ 解析动态内容失败: {e}")
+            text, pic_urls = "(解析失败)", []
+
+        return {
+            "id": dynamic_id,
+            "uid": uid,
+            "uname": uname,
+            "text": text,
+            "time": timestamp,
+            "pics": pic_urls,
+        }
+
     except Exception as e:
-        print(f"❌ JSON解析失败或网络错误: {e}")
-        print(f"返回内容片段: {resp.text[:200]}")
+        print(f"❌ 请求或解析出错: {e}")
         return None
 
-    # 容错：检查data结构是否存在
-    if not data or "data" not in data or not data["data"] or "cards" not in data["data"]:
-        print(f"⚠️ 数据结构异常，返回内容: {str(data)[:200]}")
-        return None
 
-    cards = data["data"]["cards"]
-    if not cards:
-        print("⚠️ 没有获取到动态（可能UP主近期没有动态或接口被限）")
-        return None
+def send_pushplus(content, title="Bilibili 动态提醒"):
+    """通过 PushPlus 推送消息"""
+    if not PUSH_TOKEN or PUSH_TOKEN == "你的PushPlusToken":
+        print("⚠️ 未设置 PushPlus Token，跳过推送")
+        return
 
-    card = cards[0]
-    desc = card["desc"]
-    dynamic_id = desc["dynamic_id_str"]
-    timestamp = desc["timestamp"]
-    uname = desc["user_profile"]["info"]["uname"]
-
-    content_json = json.loads(card["card"])
-    item = content_json.get("item", {})
-    text = item.get("description") or item.get("content") or "（无文字内容）"
-    pictures = item.get("pictures", [])
-    pic_urls = [p.get("img_src") for p in pictures]
-
-    return {
-        "id": dynamic_id,
-        "uid": uid,
-        "uname": uname,
-        "text": text,
-        "time": timestamp,
-        "pics": pic_urls,
+    url = "http://www.pushplus.plus/send"
+    data = {
+        "token": PUSH_TOKEN,
+        "title": title,
+        "content": content,
+        "template": "html",
     }
 
+    try:
+        r = requests.post(url, json=data, timeout=10)
+        if r.status_code == 200:
+            print("✅ 推送成功")
+        else:
+            print(f"❌ 推送失败: {r.status_code} - {r.text}")
+    except Exception as e:
+        print(f"❌ 推送出错: {e}")
 
 
-# 主逻辑
+def read_last_dynamic_id():
+    """读取上次记录的动态ID"""
+    if not os.path.exists(LAST_ID_FILE):
+        return None
+    with open(LAST_ID_FILE, "r", encoding="utf-8") as f:
+        return f.read().strip()
+
+
+def save_last_dynamic_id(dynamic_id):
+    """保存最新动态ID"""
+    with open(LAST_ID_FILE, "w", encoding="utf-8") as f:
+        f.write(str(dynamic_id))
+
+
 def main():
     print("🚀 正在检查 UP 主动态...")
+
     latest = get_latest_dynamic(UID)
+    if not latest:
+        print("⚠️ 未检测到新动态（可能接口延迟或被限流）")
+        return
+
+    last_id = read_last_dynamic_id()
     print(f"🧾 最新动态ID: {latest['id']}")
-    print(f"🧍 用户: {latest['uname']}")
-    print(f"📝 内容: {latest['text']}")
+    print(f"📄 内容: {latest['text'][:50]}...")
 
-    # 读取本地上次记录
-    if os.path.exists(DATA_FILE):
-        with open(DATA_FILE, "r", encoding="utf-8") as f:
-            last = json.load(f)
-    else:
-        last = {}
+    if last_id == latest["id"]:
+        print("ℹ️ 没有新动态，跳过推送。")
+        return
 
-    # 对比是否有新动态
-    if last.get("id") != latest["id"]:
-        print("✨ 检测到新动态，准备推送...")
-        link = f"https://t.bilibili.com/{latest['id']}"
-        pic_html = "".join([f'<img src="{url}" width="300"><br>' for url in latest['pics']])
-        content = f"<b>{latest['uname']}</b> 发布新动态：<br>{latest['text']}<br><a href='{link}'>查看动态</a><br>{pic_html}"
-        send_push("Bilibili 动态更新提醒", content)
-        with open(DATA_FILE, "w", encoding="utf-8") as f:
-            json.dump(latest, f, ensure_ascii=False, indent=2)
-    else:
-        print("⏳ 暂无新动态。")
+    # 格式化时间
+    dt = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(latest["time"]))
+    pics_html = "".join([f'<br><img src="{url}" width="250"/>' for url in latest["pics"]])
+
+    msg = f"""
+    <b>UP主：</b>{latest['uname']}<br>
+    <b>时间：</b>{dt}<br>
+    <b>内容：</b><br>{latest['text'].replace('\n', '<br>')}<br>
+    <a href="https://t.bilibili.com/{latest['id']}">🔗 点此查看原动态</a>
+    {pics_html}
+    """
+
+    send_pushplus(msg, title=f"{latest['uname']} 有新动态！")
+    save_last_dynamic_id(latest["id"])
+
 
 if __name__ == "__main__":
     main()
