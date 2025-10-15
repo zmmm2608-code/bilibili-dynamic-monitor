@@ -28,7 +28,15 @@ def send_push(title, content):
 # 获取 UP 最新动态
 def get_latest_dynamic(uid):
     url = f"https://api.vc.bilibili.com/dynamic_svr/v1/dynamic_svr/space_history?host_uid={uid}"
-    resp = requests.get(url, timeout=10)
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                      "AppleWebKit/537.36 (KHTML, like Gecko) "
+                      "Chrome/120.0 Safari/537.36",
+        "Referer": f"https://space.bilibili.com/{uid}/",
+    }
+    resp = requests.get(url, headers=headers, timeout=10)
+    if resp.status_code != 200 or not resp.text.strip():
+        raise Exception(f"请求失败，状态码: {resp.status_code}, 内容: {resp.text[:100]}")
     data = resp.json()
     card = data["data"]["cards"][0]
     desc = card["desc"]
@@ -47,6 +55,7 @@ def get_latest_dynamic(uid):
         "time": timestamp,
         "pics": pic_urls
     }
+
 
 # 主逻辑
 def main():
